@@ -1,0 +1,1 @@
+-record(log, {month, day, hour, minute, second, host, command, pid, message}).
