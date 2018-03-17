@@ -1,4 +1,6 @@
 -module(log_parser).
+-include_lib("stdlib/include/qlc.hrl").
+-include("log.hrl").
 -export([read_file/1, parse_syslog/1]).
 
 read_file(File) ->
