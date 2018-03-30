@@ -1,7 +1,7 @@
 -module(log_parser).
 -include_lib("stdlib/include/qlc.hrl").
 -include("log.hrl").
--export([init_db/0, start/1]).
+-export([init_db/0, start/1, show_all_logs/0]).
 
 init_db() ->
     mnesia:create_schema([node()]),
@@ -46,11 +46,16 @@ get_lines(FileHandle, Buffer) ->
 
 %% TODO: mnesia:write fails with "no transaction"
 persist_data([_, Month, Day, Hour, Minute, Second, Host, Command, Pid, Message]) ->
+    io:format("Writing ~s ~s ~s ~s ~s ~s ~s ~s ~s~n[", [Month, Day, Hour, Minute, Second, Host, Command, Pid, Message]),
     F = fun() -> 
         Row = #log{month=Month, day=Day, hour=Hour, minute=Minute, second=Second, host=Host, command=Command, pid=Pid, message=Message},
 	mnesia:write(Row)
     end,	
     mnesia:transaction(F).
 
+show_all_logs() ->
+    SelectAll = fun() -> qlc:e(qlc:q([X || X <- mnesia:table(log)])) end,
+    {atomic, Val} = mnesia:transaction(SelectAll),
+    Val.
 
 
