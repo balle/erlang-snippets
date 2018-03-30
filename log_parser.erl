@@ -18,12 +18,22 @@ start(File) ->
 parse_syslog(Line) ->
     %% Mar 17 16:23:19 writeordie /bsd: /tmp force dirty (dangling 164 inflight 0)
     %% Mar 17 16:25:57 writeordie /bsd: urtwn0 detached
-    {ok, MatchSyslog} = re:compile("^(?<Month>\\w{3})\\s(?<Day>\\d{2})\\s(?<Hour>\\d{2}):(?<Minute>\\d{2}):(?<Second>\\d{2})\\s(?<Host>\\w+?)\\s(?<Command>.+?)(\[(?<Pid>\\d+?)\])?:\\s(?<Message>.+)$"),
+    {ok, MatchSyslog} = re:compile("^(?<Month>\\w{3})\\s(?<Day>\\d{2})\\s(?<Hour>\\d{2}):(?<Minute>\\d{2}):(?<Second>\\d{2})\\s(?<Host>\\w+?)\\s(?<Command>.+?)(\\[(?<Pid>\\d+?)\\]){0,1}:\\s(?<Message>.+)$"),
 
     case re:run(Line, MatchSyslog) of
-        {match, ParsedLine} -> persist_data(ParsedLine);
+        {match, ParsedLine} -> persist_data(match_to_string(Line, ParsedLine));
 	    nomatch -> []
     end.
+
+resolve_match(_, {-1, 0}) ->
+    "";
+
+resolve_match(Line, {Start, Length}) ->
+    string:sub_string(Line, Start+1, Start+Length).
+
+match_to_string(Line, [_|MatchSyslog]) ->
+    ResolveMatch = fun(Match) -> resolve_match(Line, Match) end,
+    [ResolveMatch(X) || X <- MatchSyslog].
 
 read_file(File) ->
     {ok, FileHandle} = file:open(File, [read]), 
