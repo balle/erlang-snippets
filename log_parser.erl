@@ -12,19 +12,18 @@ init_db() ->
 start(File) ->
     mnesia:start(),
     Data = read_file(File),
-    ParseSyslog = fun(Line) ->
-        %% Mar 17 16:23:19 writeordie /bsd: /tmp force dirty (dangling 164 inflight 0)
-        %% Mar 17 16:25:57 writeordie /bsd: urtwn0 detached
-        {ok, MatchSyslog} = re:compile("^(?<Month>\\w{3})\\s(?<Day>\\d{2})\\s(?<Hour>\\d{2}):(?<Minute>\\d{2}):(?<Second>\\d{2})\\s(?<Host>\\w+?)\\s(?<Command>.+?)(\[(?<Pid>\\d+?)\])?:\\s(?<Message>.+)$"),
-
-        case re:run(Line, MatchSyslog) of
-            {match, ParsedLine} -> persist_data(ParsedLine);
-	    nomatch -> []
-        end
-    end,
-
-    lists:foreach(ParseSyslog, Data),
+    lists:foreach(fun(Line) -> parse_syslog(Line) end, Data),
     mnesia:stop().
+
+parse_syslog(Line) ->
+    %% Mar 17 16:23:19 writeordie /bsd: /tmp force dirty (dangling 164 inflight 0)
+    %% Mar 17 16:25:57 writeordie /bsd: urtwn0 detached
+    {ok, MatchSyslog} = re:compile("^(?<Month>\\w{3})\\s(?<Day>\\d{2})\\s(?<Hour>\\d{2}):(?<Minute>\\d{2}):(?<Second>\\d{2})\\s(?<Host>\\w+?)\\s(?<Command>.+?)(\[(?<Pid>\\d+?)\])?:\\s(?<Message>.+)$"),
+
+    case re:run(Line, MatchSyslog) of
+        {match, ParsedLine} -> persist_data(ParsedLine);
+	    nomatch -> []
+    end.
 
 read_file(File) ->
     {ok, FileHandle} = file:open(File, [read]), 
