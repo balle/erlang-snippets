@@ -12,7 +12,18 @@ init_db() ->
 start(File) ->
     mnesia:start(),
     Data = read_file(File),
-    lists:foreach(parse_syslog, Data),
+    ParseSyslog = fun(Line) ->
+        %% Mar 17 16:23:19 writeordie /bsd: /tmp force dirty (dangling 164 inflight 0)
+        %% Mar 17 16:25:57 writeordie /bsd: urtwn0 detached
+        {ok, MatchSyslog} = re:compile("^(?<Month>\\w{3})\\s(?<Day>\\d{2})\\s(?<Hour>\\d{2}):(?<Minute>\\d{2}):(?<Second>\\d{2})\\s(?<Host>\\w+?)\\s(?<Command>.+?)(\[(?<Pid>\\d+?)\])?:\\s(?<Message>.+)$"),
+
+        case re:run(Line, MatchSyslog) of
+            {match, ParsedLine} -> persist_data(ParsedLine);
+	    nomatch -> []
+        end
+    end,
+
+    lists:foreach(ParseSyslog, Data),
     mnesia:stop().
 
 read_file(File) ->
@@ -34,20 +45,13 @@ get_lines(FileHandle, Buffer) ->
         Buffer
     end.
 
-parse_syslog(Line) ->
-    %% Mar 17 16:23:19 writeordie /bsd: /tmp force dirty (dangling 164 inflight 0)
-    %% Mar 17 16:25:57 writeordie /bsd: urtwn0 detached
-    {ok, MatchSyslog} = re:compile("^(?<Month>\\w{3})\\s(?<Day>\\d{2})\\s(?<Hour>\\d{2}):(?<Minute>\\d{2}):(?<Second>\\d{2})\\s(?<Host>\\w+?)\\s(?<Command>.+?)(\[(?<Pid>\\d+?)\])?:\\s(?<Message>.+)$"),
-
-    case re:run(Line, MatchSyslog) of
-        {match, ParsedLine} -> persist_data(ParsedLine);
-	notmatch -> []
-    end.
-
 %% TODO: mnesia:write fails with "no transaction"
 persist_data([_, Month, Day, Hour, Minute, Second, Host, Command, Pid, Message]) ->
-    Row = #log{month=Month, day=Day, hour=Hour, minute=Minute, second=Second, host=Host, command=Command, pid=Pid, message=Message},
-    mnesia:write(Row).
+    F = fun() -> 
+        Row = #log{month=Month, day=Day, hour=Hour, minute=Minute, second=Second, host=Host, command=Command, pid=Pid, message=Message},
+	mnesia:write(Row)
+    end,	
+    mnesia:transaction(F).
 
 
 
