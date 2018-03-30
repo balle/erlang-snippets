@@ -10,10 +10,10 @@ init_db() ->
     mnesia:stop().
 
 start(File) ->
-    mnesia:start(),
+    %%mnesia:start(),
     Data = read_file(File),
-    lists:foreach(fun(Line) -> parse_syslog(Line) end, Data),
-    mnesia:stop().
+    lists:foreach(fun(Line) -> parse_syslog(Line) end, Data).
+    %%mnesia:stop().
 
 parse_syslog(Line) ->
     %% Mar 17 16:23:19 writeordie /bsd: /tmp force dirty (dangling 164 inflight 0)
