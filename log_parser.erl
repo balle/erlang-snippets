@@ -1,7 +1,19 @@
 -module(log_parser).
 -include_lib("stdlib/include/qlc.hrl").
 -include("log.hrl").
--export([read_file/1, parse_syslog/1, persist_data/1]).
+-export([init_db/0, start/1]).
+
+init_db() ->
+    mnesia:create_schema([node()]),
+    mnesia:start(),
+    mnesia:create_table(log, [{attributes, record_info(fields, log)}]),
+    mnesia:stop().
+
+start(File) ->
+    mnesia:start(),
+    Data = read_file(File),
+    lists:foreach(parse_syslog, Data),
+    mnesia:stop().
 
 read_file(File) ->
     {ok, FileHandle} = file:open(File, [read]), 
@@ -32,9 +44,8 @@ parse_syslog(Line) ->
 	notmatch -> []
     end.
 
-%% TODO: why are there 10 instead of 9 entries in list ParsedLine?
 %% TODO: mnesia:write fails with "no transaction"
-persist_data([Month, Day, Hour, Minute, Second, Host, Command, Pid, Message, _]) ->
+persist_data([_, Month, Day, Hour, Minute, Second, Host, Command, Pid, Message]) ->
     Row = #log{month=Month, day=Day, hour=Hour, minute=Minute, second=Second, host=Host, command=Command, pid=Pid, message=Message},
     mnesia:write(Row).
 
