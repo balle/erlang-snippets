@@ -6,7 +6,7 @@
 -spec start(Filename::string()) -> none().
 -spec show_all_logs() -> list().
 -spec match_to_string(Line::string(), Matches::list()) -> list().
--spec parse_syslog(Line::string()) -> list().
+-spec parse_syslog(Line::string()) -> list() | erlang:throw(nomatch).
 
 
 init_db() ->
