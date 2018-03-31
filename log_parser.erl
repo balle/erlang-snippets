@@ -3,6 +3,12 @@
 -include("log.hrl").
 -export([init_db/0, start/1, show_all_logs/0]).
 
+-spec start(Filename::string()) -> none().
+-spec show_all_logs() -> list().
+-spec match_to_string(Line::string(), Matches::list()) -> list().
+-spec parse_syslog(Line::string()) -> list().
+
+
 init_db() ->
     mnesia:create_schema([node()]),
     mnesia:start(),
