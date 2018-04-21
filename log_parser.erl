@@ -6,7 +6,6 @@
 -spec start(Filename::string()) -> none().
 -spec show_all_logs() -> list().
 -spec match_to_string(Line::string(), Matches::list()) -> list().
--spec parse_syslog(Line::string()) -> list() | erlang:throw(nomatch).
 
 
 init_db() ->
@@ -18,7 +17,10 @@ init_db() ->
 
 start(File) ->
     %%mnesia:start(),
-    lists:foreach(fun(Line) -> try persist_data( parse_syslog(Line) )
+    Syslog_parser = spawn(log_parser, parse_syslog, []),
+    Data_Persister = spawn(log_parser, persist_data, []),
+
+    lists:foreach(fun(Line) -> try Syslog_parser ! {Data_Persister, Line}
                                catch
                                    throw:nomatch -> io:format("NOMATCH: ~s~n", [Line])
                                end
@@ -27,14 +29,21 @@ start(File) ->
     %%mnesia:stop().
 
 
-parse_syslog(Line) ->
-    %% Mar 17 16:23:19 writeordie /bsd: /tmp force dirty (dangling 164 inflight 0)
-    %% Mar 17 16:25:57 writeordie /bsd: urtwn0 detached
-    {ok, MatchSyslog} = re:compile("^(?<Month>\\w{3})\\s(?<Day>\\d{2})\\s(?<Hour>\\d{2}):(?<Minute>\\d{2}):(?<Second>\\d{2})\\s(?<Host>\\w+?)\\s(?<Command>.+?)(\\[(?<Pid>\\d+?)\\])?:\\s(?<Message>.+)$"),
+parse_syslog() ->
+    receive
+        {From, Line} ->
+            %% Mar 17 16:23:19 writeordie /bsd: /tmp force dirty (dangling 164 inflight 0)
+            %% Mar 17 16:25:57 writeordie /bsd: urtwn0 detached
+            {ok, MatchSyslog} = re:compile("^(?<Month>\\w{3})\\s(?<Day>\\d{2})\\s(?<Hour>\\d{2}):(?<Minute>\\d{2}):(?<Second>\\d{2})\\s(?<Host>\\w+?)\\s(?<Command>.+?)(\\[(?<Pid>\\d+?)\\])?:\\s(?<Message>.+)$"),
+        
+            case re:run(Line, MatchSyslog) of
+                {match, ParsedLine} -> From ! match_to_string(Line, ParsedLine);
+        	nomatch -> throw(nomatch)
+            end,
+    
+            parse_syslog();
 
-    case re:run(Line, MatchSyslog) of
-        {match, ParsedLine} -> match_to_string(Line, ParsedLine);
-	 nomatch -> throw(nomatch)
+        _Other -> parse_syslog()
     end.
 
 
@@ -71,13 +80,19 @@ get_lines(FileHandle, Buffer) ->
     end.
 
 
-persist_data([_, Month, Day, Hour, Minute, Second, Host, Command, Pid, Message]) ->
-    io:format("Writing ~s ~s ~s ~s ~s ~s ~s ~s ~s~n[", [Month, Day, Hour, Minute, Second, Host, Command, Pid, Message]),
-    F = fun() -> 
-        Row = #log{month=Month, day=Day, hour=Hour, minute=Minute, second=Second, host=Host, command=Command, pid=Pid, message=Message},
-	mnesia:write(Row)
-    end,	
-    mnesia:transaction(F).
+persist_data() ->
+    receive
+        {_, Month, Day, Hour, Minute, Second, Host, Command, Pid, Message} ->
+            io:format("Writing ~s ~s ~s ~s ~s ~s ~s ~s ~s~n[", [Month, Day, Hour, Minute, Second, Host, Command, Pid, Message]),
+            F = fun() -> 
+                Row = #log{month=Month, day=Day, hour=Hour, minute=Minute, second=Second, host=Host, command=Command, pid=Pid, message=Message},
+        	mnesia:write(Row)
+            end,	
+      	    mnesia:transaction(F),
+    	    persist_data();
+
+        _Other -> persist_data()
+    end.
 
 
 show_all_logs() ->
