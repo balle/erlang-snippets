@@ -1,7 +1,7 @@
 -module(log_parser).
 -include_lib("stdlib/include/qlc.hrl").
 -include("log.hrl").
--export([init_db/0, start/1, show_all_logs/0]).
+-export([init_db/0, start/1, show_all_logs/0, parse_syslog/0, persist_data/0]).
 
 -spec start(Filename::string()) -> none().
 -spec show_all_logs() -> list().
@@ -20,11 +20,10 @@ start(File) ->
     Syslog_parser = spawn(log_parser, parse_syslog, []),
     Data_Persister = spawn(log_parser, persist_data, []),
 
-    lists:foreach(fun(Line) -> try Syslog_parser ! {Data_Persister, Line}
-                               catch
-                                   throw:nomatch -> io:format("NOMATCH: ~s~n", [Line])
-                               end
-		  end, read_file(File)).   
+    Syslog_parser ! {Data_Persister, "Mar 17 16:25:57 writeordie /bsd: urtwn0 detached"},
+
+    lists:foreach(fun(Line) -> Syslog_parser ! {Data_Persister, Line} end, read_file(File)).   
+
     %%mnesia:sync_log,
     %%mnesia:stop().
 
@@ -32,19 +31,20 @@ start(File) ->
 parse_syslog() ->
     receive
         {From, Line} ->
+            io:format("Parsing ~s~n", [Line]),
+
             %% Mar 17 16:23:19 writeordie /bsd: /tmp force dirty (dangling 164 inflight 0)
             %% Mar 17 16:25:57 writeordie /bsd: urtwn0 detached
             {ok, MatchSyslog} = re:compile("^(?<Month>\\w{3})\\s(?<Day>\\d{2})\\s(?<Hour>\\d{2}):(?<Minute>\\d{2}):(?<Second>\\d{2})\\s(?<Host>\\w+?)\\s(?<Command>.+?)(\\[(?<Pid>\\d+?)\\])?:\\s(?<Message>.+)$"),
         
             case re:run(Line, MatchSyslog) of
                 {match, ParsedLine} -> From ! match_to_string(Line, ParsedLine);
-        	nomatch -> throw(nomatch)
+        	nomatch -> io:format("NOMATCH: ~s~n", [Line])
             end,
     
-            parse_syslog();
-
-        _Other -> parse_syslog()
+            parse_syslog()
     end.
+
 
 
 resolve_match(_, {-1, 0}) ->
@@ -89,9 +89,7 @@ persist_data() ->
         	mnesia:write(Row)
             end,	
       	    mnesia:transaction(F),
-    	    persist_data();
-
-        _Other -> persist_data()
+    	    persist_data()
     end.
 
 
