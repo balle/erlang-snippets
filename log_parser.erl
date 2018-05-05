@@ -1,7 +1,7 @@
 -module(log_parser).
 -include_lib("stdlib/include/qlc.hrl").
 -include("log.hrl").
--export([init_db/0, start/1, show_all_logs/0, parse_syslog/0, persist_data/0]).
+-export([init_db/0, start/1, show_all_logs/0, parse_syslog/0, persist_data/0, process_file/1, watch_processes/0]).
 
 -spec start(Filename::string()) -> none().
 -spec show_all_logs() -> list().
@@ -17,28 +17,51 @@ init_db() ->
 
 start(File) ->
     %%mnesia:start(),
-    Syslog_parser = spawn(log_parser, parse_syslog, []),
+    process_flag(trap_exit, true),
+
+    Syslog_Parser = spawn(log_parser, parse_syslog, []),
     Data_Persister = spawn(log_parser, persist_data, []),
+    spawn(log_parser, process_file, [File]),
+    
+    register(syslog_parser, Syslog_Parser),
+    register(data_persister, Data_Persister),
 
-    Syslog_parser ! {Data_Persister, "Mar 17 16:25:57 writeordie /bsd: urtwn0 detached"},
-
-    lists:foreach(fun(Line) -> Syslog_parser ! {Data_Persister, Line} end, read_file(File)).   
+    spawn(log_parser, watch_processes(), []).
 
     %%mnesia:sync_log,
     %%mnesia:stop().
 
 
+watch_processes() ->
+    Syslog_PID = whereis(syslog_parser),
+    Persister_PID = whereis(data_persister),
+
+    receive
+        {'EXIT', FromPID, _Reason} ->
+	    case FromPID of
+                Syslog_PID ->
+		    register(syslog_parser, spawn(log_parser, parse_syslog, [])),
+                    watch_processes();
+		Persister_PID ->
+                    register(syslog_parser, spawn(log_parser, parse_syslog, [])),
+		    watch_processes()
+             end
+    end.
+
+
+process_file(File) ->
+    lists:foreach(fun(Line) -> syslog_parser ! {Line} end, read_file(File)).   
+    
+
 parse_syslog() ->
     receive
-        {From, Line} ->
-            io:format("Parsing ~s~n", [Line]),
-
+        Line ->
             %% Mar 17 16:23:19 writeordie /bsd: /tmp force dirty (dangling 164 inflight 0)
             %% Mar 17 16:25:57 writeordie /bsd: urtwn0 detached
             {ok, MatchSyslog} = re:compile("^(?<Month>\\w{3})\\s(?<Day>\\d{2})\\s(?<Hour>\\d{2}):(?<Minute>\\d{2}):(?<Second>\\d{2})\\s(?<Host>\\w+?)\\s(?<Command>.+?)(\\[(?<Pid>\\d+?)\\])?:\\s(?<Message>.+)$"),
         
             case re:run(Line, MatchSyslog) of
-                {match, ParsedLine} -> From ! match_to_string(Line, ParsedLine);
+                {match, ParsedLine} -> data_persister ! match_to_string(Line, ParsedLine);
         	nomatch -> io:format("NOMATCH: ~s~n", [Line])
             end,
     
