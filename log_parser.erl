@@ -54,7 +54,7 @@ watch_processes() ->
 
 
 process_file(File) ->
-    lists:foreach(fun(Line) -> syslog_parser ! {Line} end, read_file(File)).   
+    lists:foreach(fun(Line) -> whereis(syslog_parser) ! {Line} end, read_file(File)).   
     
 
 parse_line(Match) ->
@@ -64,8 +64,7 @@ parse_line(Match) ->
         Line ->        
             case re:run(Line, Match) of
                 {match, ParsedLine} -> Persister_PID ! match_to_string(Line, ParsedLine);
-        	nomatch -> io:format("NOMATCH: ~w~n", [Line]);
-		{badarg, Arg, _} -> io:format("BADARG: ~w~n~w~n", [Line, Arg])
+        	nomatch -> io:format("NOMATCH: ~s~n", [Line])
             end,
     
             parse_line(Match)
