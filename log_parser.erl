@@ -30,7 +30,7 @@ start(File) ->
     register(data_persister, Data_Persister),
 
     spawn(log_parser, process_file, [File]),
-    spawn(log_parser, watch_processes(), []).
+    spawn(log_parser, watch_processes, []).
 
     %%mnesia:sync_log,
     %%mnesia:stop().
@@ -54,7 +54,7 @@ watch_processes() ->
 
 
 process_file(File) ->
-    lists:foreach(fun(Line) -> whereis(syslog_parser) ! {Line} end, read_file(File)).   
+    lists:foreach(fun(Line) -> whereis(syslog_parser) ! Line end, read_file(File)).   
     
 
 parse_line(Match) ->
