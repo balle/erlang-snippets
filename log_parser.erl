@@ -107,7 +107,8 @@ get_lines(FileHandle, Buffer) ->
 
 persist_data() ->
     receive
-        {_, Month, Day, Hour, Minute, Second, Host, Command, Pid, Message} ->
+%% "May","19","14","40","44","writeordie","/bsd",[],[], "ugen0 detached"
+        [Month, Day, Hour, Minute, Second, Host, Command, Pid, _, Message] ->
             io:format("Writing ~s ~s ~s ~s ~s ~s ~s ~s ~s~n[", [Month, Day, Hour, Minute, Second, Host, Command, Pid, Message]),
             F = fun() -> 
                 Row = #log{month=Month, day=Day, hour=Hour, minute=Minute, second=Second, host=Host, command=Command, pid=Pid, message=Message},
