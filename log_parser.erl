@@ -20,8 +20,8 @@ start(File) ->
     process_flag(trap_exit, true),
 
     %% Mar 17 16:23:19 writeordie /bsd: /tmp force dirty (dangling 164 inflight 0)
-    %% Mar 17 16:25:57 writeordie /bsd: urtwn0 detached
-    {ok, MatchSyslog} = re:compile("^(?<Month>\\w{3})\\s(?<Day>\\d{2})\\s(?<Hour>\\d{2}):(?<Minute>\\d{2}):(?<Second>\\d{2})\\s(?<Host>\\w+?)\\s(?<Command>.+?)(\\[(?<Pid>\\d+?)\\])?:\\s(?<Message>.+)$"),
+    %% May  9 22:33:35 writeordie pkg_add: Added chocolate-doom-3.0.0
+    {ok, MatchSyslog} = re:compile("^(?<Month>\\w{3})\\s{1,2}(?<Day>\\d{1,2})\\s(?<Hour>\\d{2}):(?<Minute>\\d{2}):(?<Second>\\d{2})\\s(?<Host>\\w+?)\\s(?<Command>.+?)(\\[(?<Pid>\\d+?)\\])?:\\s(?<Message>.+)$"),
 
     Syslog_Parser = spawn(log_parser, parse_line, [MatchSyslog]),
     Data_Persister = spawn(log_parser, persist_data, []),
