@@ -23,8 +23,8 @@ start(File) ->
     %% May  9 22:33:35 writeordie pkg_add: Added chocolate-doom-3.0.0
     {ok, MatchSyslog} = re:compile("^(?<Month>\\w{3})\\s{1,2}(?<Day>\\d{1,2})\\s(?<Hour>\\d{2}):(?<Minute>\\d{2}):(?<Second>\\d{2})\\s(?<Host>\\w+?)\\s(?<Command>.+?)(\\[(?<Pid>\\d+?)\\])?:\\s(?<Message>.+)$"),
 
-    keep_alive(syslog_parser, parse_line, [MatchSyslog]),
-    keep_alive(data_persister, persist_data, []),
+    keep_alive(node(), syslog_parser, parse_line, [MatchSyslog]),
+    keep_alive(node(), data_persister, persist_data, []),
 
     spawn(log_parser, process_file, [File]).
 
@@ -41,11 +41,11 @@ on_exit(Pid, Fun) ->
     end).
 
 
-keep_alive(Name, Fun, Args) ->
-    register(Name, Pid = spawn(log_parser, Fun, Args)),
+keep_alive(Node, Name, Fun, Args) ->
+    register(Name, Pid = spawn(Node, log_parser, Fun, Args)),
     on_exit(Pid, fun(Why) ->
         error_logger:error_msg("Process ~s [~s] died: ~s~n", [Name, Pid, Why]), 
-        keep_alive(Name, Fun, Args) end).
+        keep_alive(Node, Name, Fun, Args) end).
 
 
 process_file(File) ->
