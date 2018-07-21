@@ -23,34 +23,27 @@ start(File) ->
     %% May  9 22:33:35 writeordie pkg_add: Added chocolate-doom-3.0.0
     {ok, MatchSyslog} = re:compile("^(?<Month>\\w{3})\\s{1,2}(?<Day>\\d{1,2})\\s(?<Hour>\\d{2}):(?<Minute>\\d{2}):(?<Second>\\d{2})\\s(?<Host>\\w+?)\\s(?<Command>.+?)(\\[(?<Pid>\\d+?)\\])?:\\s(?<Message>.+)$"),
 
-    Syslog_Parser = spawn(log_parser, parse_line, [MatchSyslog]),
-    Data_Persister = spawn(log_parser, persist_data, []),
-    
-    register(syslog_parser, Syslog_Parser),
-    register(data_persister, Data_Persister),
+    keep_alive(syslog_parser, parse_line, [MatchSyslog]),
+    keep_alive(data_persister, persist_data, []),
 
-    spawn(log_parser, process_file, [File]),
-    spawn(log_parser, watch_processes, []).
+    spawn(log_parser, process_file, [File]).
 
     %%mnesia:sync_log,
     %%mnesia:stop().
 
 
-watch_processes() ->
-    Syslog_PID = whereis(syslog_parser),
-    Persister_PID = whereis(data_persister),
+on_exit(Pid, Fun) ->
+    spawn(fun() ->
+        Ref= monitor(process, Pid),
+	receive
+	    {'DOWN', Ref, process, Pid, Why} -> Fun(Why)
+	end
+    end).
 
-    receive
-        {'EXIT', FromPID, _Reason} ->
-	    case FromPID of
-                Syslog_PID ->
-		    register(syslog_parser, spawn(log_parser, parse_syslog, [])),
-                    watch_processes();
-		Persister_PID ->
-                    register(syslog_parser, spawn(log_parser, persist_data, [])),
-		    watch_processes()
-             end
-    end.
+
+keep_alive(Name, Fun, Args) ->
+    register(Name, Pid = spawn(log_parser, Fun, Args)),
+    on_exit(Pid, fun(_Why) -> keep_alive(Name, Fun, Args) end).
 
 
 process_file(File) ->
@@ -107,7 +100,6 @@ get_lines(FileHandle, Buffer) ->
 
 persist_data() ->
     receive
-%% "May","19","14","40","44","writeordie","/bsd",[],[], "ugen0 detached"
         [Month, Day, Hour, Minute, Second, Host, Command, Pid, _, Message] ->
             io:format("Writing ~s ~s ~s ~s ~s ~s ~s ~s ~s~n[", [Month, Day, Hour, Minute, Second, Host, Command, Pid, Message]),
             F = fun() -> 
