@@ -1,7 +1,7 @@
 -module(log_parser).
 -include_lib("stdlib/include/qlc.hrl").
 -include("log.hrl").
--export([init_db/0, start/1, show_all_logs/0, parse_line/1, persist_data/0, process_file/1, watch_processes/0]).
+-export([init_db/0, start/1, show_all_logs/0, parse_line/1, persist_data/0, process_file/1]).
 
 -spec start(Filename::string()) -> none().
 -spec show_all_logs() -> list().
@@ -43,7 +43,9 @@ on_exit(Pid, Fun) ->
 
 keep_alive(Name, Fun, Args) ->
     register(Name, Pid = spawn(log_parser, Fun, Args)),
-    on_exit(Pid, fun(_Why) -> keep_alive(Name, Fun, Args) end).
+    on_exit(Pid, fun(Why) ->
+        error_logger:error_msg("Process ~s [~s] died: ~s~n", [Name, Pid, Why]), 
+        keep_alive(Name, Fun, Args) end).
 
 
 process_file(File) ->
@@ -57,7 +59,7 @@ parse_line(Match) ->
         Line ->        
             case re:run(Line, Match) of
                 {match, ParsedLine} -> Persister_PID ! match_to_string(Line, ParsedLine);
-        	nomatch -> io:format("NOMATCH: ~s~n", [Line])
+        	nomatch -> error_logger:warning_msg("NOMATCH: ~s~n", [Line])
             end,
     
             parse_line(Match)
@@ -101,7 +103,7 @@ get_lines(FileHandle, Buffer) ->
 persist_data() ->
     receive
         [Month, Day, Hour, Minute, Second, Host, Command, Pid, _, Message] ->
-            io:format("Writing ~s ~s ~s ~s ~s ~s ~s ~s ~s~n[", [Month, Day, Hour, Minute, Second, Host, Command, Pid, Message]),
+            error_logger:info_msg("Writing ~s ~s ~s ~s ~s ~s ~s ~s ~s~n[", [Month, Day, Hour, Minute, Second, Host, Command, Pid, Message]),
             F = fun() -> 
                 Row = #log{month=Month, day=Day, hour=Hour, minute=Minute, second=Second, host=Host, command=Command, pid=Pid, message=Message},
         	mnesia:write(Row)
